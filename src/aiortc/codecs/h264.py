@@ -130,11 +130,20 @@ def create_encoder_context(
     codec.pix_fmt = "yuv420p"
     codec.framerate = fractions.Fraction(MAX_FRAME_RATE, 1)
     codec.time_base = fractions.Fraction(1, MAX_FRAME_RATE)
-    codec.options = {
-        "profile": "baseline",
-        "level": "31",
-        "tune": "zerolatency",  # does nothing using h264_omx
-    }
+    if codec_name == "h264_nvenc":
+        codec.options = {
+            "profile": "baseline",
+            "level": "auto",
+            "preset": "fast",  # does nothing using h264_omx
+            "gpu": "0",
+            "zerolatency": "1",
+        }
+    else:
+        codec.options = {
+            "profile": "baseline",
+            "level": "31",
+            "tune": "zerolatency",  # does nothing using h264_omx
+        }
     codec.open()
     return codec, codec_name == "h264_omx"
 
@@ -291,12 +300,21 @@ class H264Encoder(Encoder):
                     "h264_omx", frame.width, frame.height, bitrate=self.target_bitrate
                 )
             except Exception:
-                self.codec, self.codec_buffering = create_encoder_context(
-                    "libx264",
-                    frame.width,
-                    frame.height,
-                    bitrate=self.target_bitrate,
-                )
+                try:
+                    self.codec, self.codec_buffering = create_encoder_context(
+                        "h264_nvenc",
+                        frame.width,
+                        frame.height,
+                        bitrate=self.target_bitrate,
+                    )
+                    self.codec_buffering = True
+                except Exception:
+                    self.codec, self.codec_buffering = create_encoder_context(
+                        "libx264",
+                        frame.width,
+                        frame.height,
+                        bitrate=self.target_bitrate,
+                    )
 
         data_to_send = b""
         for package in self.codec.encode(frame):
